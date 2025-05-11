@@ -5,7 +5,7 @@ from datetime import timedelta
 
 st.set_page_config(page_title="Калькулятор хэндимена", layout="centered")
 
-from streamlit_extras.st_autorefresh import st_autorefresh
+from streamlit_autorefresh import st_autorefresh
 
 st.title("🛠 Калькулятор стоимости работы")
 
