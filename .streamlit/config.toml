@@ -1,0 +1,13 @@
+[server]
+headless = true
+port = 8501
+enableCORS = false
+
+[theme]
+base = "light"
+
+[general]
+email = "your@email.com"
+
+[python]
+version = "3.10"
