@@ -5,11 +5,18 @@ from datetime import timedelta
 
 st.set_page_config(page_title="Калькулятор хэндимена", layout="centered")
 
+from streamlit.runtime.scriptrunner import add_script_run_ctx
+from streamlit_extras.stateful_button import button
+from streamlit_extras.st_autorefresh import st_autorefresh
+
 st.title("🛠 Калькулятор стоимости работы")
 
 start_time_file = "start_time.txt"
 
-# 📥 Ввод ставки и минимального времени
+# 🔁 Автообновление страницы каждые 2 секунды
+st_autorefresh(interval=2000, limit=None, key="timer-refresh")
+
+# 📥 Ввод
 rate = st.number_input("💵 Почасовая ставка ($)", min_value=0.0, value=60.0, step=1.0)
 min_hours = st.number_input("⏱ Минимальное время (в часах)", min_value=0.0, value=2.0, step=0.5)
 
@@ -17,7 +24,7 @@ min_hours = st.number_input("⏱ Минимальное время (в часа�
 if st.button("▶️ Старт таймера"):
     with open(start_time_file, "w") as f:
         f.write(str(time.time()))
-    st.success("✅ Таймер запущен. Можно закрыть страницу или телефон — всё сохранится.")
+    st.success("✅ Таймер запущен. Можно выключить телефон — всё сохранится.")
 
 # 🗑 Сброс
 if st.button("🗑 Сбросить таймер"):
@@ -27,11 +34,8 @@ if st.button("🗑 Сбросить таймер"):
     else:
         st.warning("⛔️ Таймер ещё не был запущен.")
 
-# 🔄 Автообновление каждые 2 сек (только если таймер активен)
+# 🔢 Текущий счёт
 if os.path.exists(start_time_file):
-    st.experimental_rerun()
-    time.sleep(2)
-
     with open(start_time_file, "r") as f:
         start_time = float(f.read())
 
