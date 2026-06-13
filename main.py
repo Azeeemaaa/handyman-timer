@@ -1,7 +1,8 @@
 import streamlit as st
 import time
 import os
-from datetime import timedelta
+import csv
+from datetime import datetime, timedelta
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Калькулятор хэндимена", layout="centered")
@@ -9,6 +10,32 @@ st.title("🛠 Калькулятор стоимости работы")
 
 start_file = "start_time.txt"
 pause_file = "pause_time.txt"
+history_file = "history.csv"
+
+HISTORY_FIELDS = ["date", "client", "elapsed", "billable_hours", "rate", "materials", "total"]
+
+# --- работа с историей ---
+def load_history():
+    if not os.path.exists(history_file):
+        return []
+    rows = []
+    with open(history_file, "r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            rows.append(row)
+    return rows
+
+def save_history_entry(entry):
+    file_exists = os.path.exists(history_file)
+    with open(history_file, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=HISTORY_FIELDS)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(entry)
+
+def clear_history():
+    if os.path.exists(history_file):
+        os.remove(history_file)
 
 # --- состояние ---
 if "paused" not in st.session_state:
@@ -23,6 +50,7 @@ if not st.session_state.stop_pressed:
     st_autorefresh(interval=2000, limit=None, key="refresh")
 
 # --- ввод данных ---
+client = st.text_input("👤 Клиент / описание работы", value="")
 rate = st.number_input("💵 Почасовая ставка ($)", min_value=0.0, value=60.0, step=1.0)
 materials = st.number_input("🧱 Стоимость материалов ($)", min_value=0.0, value=0.0, step=1.0)
 min_hours = 0.0  # фиксированно 0
@@ -118,3 +146,64 @@ if st.button("⏹ Стоп таймера"):
         }
         st.session_state.stop_pressed = True
         st.session_state.paused = False
+
+        # 💾 Сохраняем работу в историю
+        save_history_entry({
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "client": client.strip() or "—",
+            "elapsed": str(elapsed_td),
+            "billable_hours": f"{billable_hours:.2f}",
+            "rate": f"{rate:.2f}",
+            "materials": f"{materials:.2f}",
+            "total": f"{total_cost:.2f}",
+        })
+        st.success("💾 Работа сохранена в историю")
+
+# 📜 История работ
+st.divider()
+st.subheader("📜 История работ")
+
+history = load_history()
+if history:
+    # таблица для отображения с понятными заголовками
+    display_rows = []
+    total_earned = 0.0
+    for row in history:
+        try:
+            total_earned += float(row.get("total", 0) or 0)
+        except ValueError:
+            pass
+        display_rows.append({
+            "Дата": row.get("date", ""),
+            "Клиент": row.get("client", ""),
+            "Время": row.get("elapsed", ""),
+            "Часы": row.get("billable_hours", ""),
+            "Ставка $": row.get("rate", ""),
+            "Материалы $": row.get("materials", ""),
+            "Сумма $": row.get("total", ""),
+        })
+
+    st.dataframe(display_rows, use_container_width=True, hide_index=True)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Всего работ", len(history))
+    with col2:
+        st.metric("Общий заработок", f"${total_earned:.2f}")
+
+    # ⬇️ Скачать историю
+    with open(history_file, "r", encoding="utf-8") as f:
+        csv_data = f.read()
+    st.download_button(
+        "⬇️ Скачать историю (CSV)",
+        data=csv_data,
+        file_name="history.csv",
+        mime="text/csv",
+    )
+
+    # 🗑 Очистить историю
+    if st.button("🗑 Очистить историю"):
+        clear_history()
+        st.rerun()
+else:
+    st.caption("Пока нет сохранённых работ. Нажмите «⏹ Стоп таймера», чтобы сохранить работу.")
