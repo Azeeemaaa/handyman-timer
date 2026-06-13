@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timedelta, time as dt_time
 
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit_local_storage import LocalStorage
 from streamlit_autorefresh import st_autorefresh
 
@@ -69,6 +70,89 @@ def add_history_entry(date_str, client, elapsed_str, hours, rate, materials, tot
 
 def fmt_hms(seconds):
     return str(timedelta(seconds=int(max(0, seconds))))
+
+
+def money(v):
+    v = round(float(v), 2)
+    return f"${v:.0f}" if v == int(v) else f"${v:.2f}"
+
+
+def fmt_hours(h):
+    return "%g" % round(float(h), 2)
+
+
+def fmt_clock(t):
+    """time/datetime -> '9am' или '4:30pm' (как в письме клиенту)."""
+    s = t.strftime("%I:%M%p").lower()
+    if s.startswith("0"):
+        s = s[1:]
+    return s.replace(":00", "")
+
+
+def build_message(start_str, end_str, break_min, hours, rate, materials, total):
+    """Собирает письмо клиенту в том же стиле, что ты отправляешь вручную."""
+    labor = hours * rate
+    lines = [
+        "Hi sir 👋",
+        "I've finished the work for today ✅",
+        "",
+        "Today:",
+        "",
+        f"I started {start_str} and finished {end_str}",
+    ]
+    if break_min:
+        lines.append(f"Break: {break_min} min")
+    lines += [
+        "",
+        f"Labor: {fmt_hours(hours)}h - {money(labor)}",
+        f"Materials – {money(materials)}",
+        "",
+        f"Total: {money(total)}",
+        "",
+        "Have a great day! 🤝",
+    ]
+    return "\n".join(lines)
+
+
+def message_with_copy(message, key):
+    """Показывает текст письма + кнопку «Скопировать текст» (работает на телефоне)."""
+    payload = json.dumps(message)
+    html_code = f"""
+    <div style="font-family: -apple-system, system-ui, sans-serif;">
+      <textarea id="ta_{key}" readonly
+        style="width:100%; height:300px; font-size:15px; padding:10px; box-sizing:border-box;
+               border:1px solid #ccc; border-radius:8px; resize:vertical;"></textarea>
+      <button id="btn_{key}"
+        style="margin-top:8px; width:100%; padding:14px; font-size:16px; font-weight:600;
+               border:none; border-radius:8px; background:#2e7d32; color:#fff; cursor:pointer;">
+        📋 Скопировать текст
+      </button>
+      <div id="ok_{key}" style="text-align:center; color:#2e7d32; margin-top:8px; min-height:20px;"></div>
+    </div>
+    <script>
+      (function() {{
+        const msg = {payload};
+        const ta = document.getElementById("ta_{key}");
+        ta.value = msg;
+        document.getElementById("btn_{key}").addEventListener("click", function() {{
+          const done = function() {{
+            document.getElementById("ok_{key}").innerText = "✅ Скопировано! Вставь клиенту";
+          }};
+          ta.focus(); ta.select(); ta.setSelectionRange(0, 999999);
+          if (navigator.clipboard && navigator.clipboard.writeText) {{
+            navigator.clipboard.writeText(msg).then(done, function() {{
+              try {{ document.execCommand("copy"); }} catch (e) {{}}
+              done();
+            }});
+          }} else {{
+            try {{ document.execCommand("copy"); }} catch (e) {{}}
+            done();
+          }}
+        }});
+      }})();
+    </script>
+    """
+    components.html(html_code, height=420)
 
 
 def compute(timer):
@@ -144,6 +228,8 @@ with tab_timer:
                 "rate": timer.get("rate", 0),
                 "materials": timer.get("materials", 0),
                 "total": round(total, 2),
+                "start_clock": fmt_clock(datetime.fromtimestamp(timer["start"])),
+                "end_clock": fmt_clock(datetime.now()),
             }
             clear_timer()
             st.rerun()
@@ -158,6 +244,13 @@ with tab_timer:
             f"<h2 style='color:green;'>💲 К оплате с клиента: ${r['total']:.2f}</h2>",
             unsafe_allow_html=True,
         )
+
+        with st.expander("✉️ Текст для клиента"):
+            msg = build_message(
+                r.get("start_clock", ""), r.get("end_clock", ""), 0,
+                r["hours"], r["rate"], r["materials"], r["total"],
+            )
+            message_with_copy(msg, key="timer")
 
         client = st.text_input("👤 Имя клиента", value="", placeholder="Например: Иван, кухня", key="t_client")
         cc1, cc2 = st.columns(2)
@@ -215,6 +308,13 @@ with tab_manual:
                 f"<h2 style='color:green;'>💲 К оплате с клиента: ${total:.2f}</h2>",
                 unsafe_allow_html=True,
             )
+
+            with st.expander("✉️ Текст для клиента"):
+                msg = build_message(
+                    fmt_clock(start_t), fmt_clock(end_t), break_min,
+                    hours, rate, materials, total,
+                )
+                message_with_copy(msg, key="manual")
 
             client = st.text_input("👤 Имя клиента", value="", placeholder="Например: Иван, кухня", key="m_client")
             if st.button("💾 Сохранить в историю", use_container_width=True, type="primary", key="m_save"):
