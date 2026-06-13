@@ -7,8 +7,109 @@ import streamlit.components.v1 as components
 from streamlit_local_storage import LocalStorage
 from streamlit_autorefresh import st_autorefresh
 
-st.set_page_config(page_title="Калькулятор хэндимена", layout="centered")
-st.title("🛠 Калькулятор стоимости работы")
+st.set_page_config(page_title="Калькулятор хэндимена", page_icon="🛠", layout="centered")
+
+
+# ---------- iOS-светлый дизайн ----------
+def inject_css():
+    st.markdown(
+        """
+        <style>
+        :root {
+            --ios-blue:#007AFF; --ios-green:#34C759; --ios-red:#FF3B30;
+            --ios-gray:#8E8E93; --ios-fill:#E9E9EF; --bg:#F2F2F7; --card:#FFFFFF;
+        }
+        .stApp { background: var(--bg); }
+        .block-container {
+            max-width: 460px; padding-top: 1.4rem; padding-bottom: 4rem;
+        }
+        html, body, [class*="css"] {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+        }
+        h1 { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; }
+        h2, h3 { letter-spacing: -0.01em; }
+
+        /* Карточки (st.container(border=True)) в стиле iOS */
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            background: var(--card);
+            border: none !important;
+            border-radius: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            padding: 14px 16px;
+            margin-bottom: 6px;
+        }
+
+        /* Кнопки — крупные pill */
+        .stButton > button, .stDownloadButton > button {
+            border-radius: 14px;
+            padding: 0.7rem 1rem;
+            font-weight: 600;
+            font-size: 17px;
+            border: none;
+            width: 100%;
+            min-height: 50px;
+            transition: transform .06s ease, filter .15s ease;
+        }
+        .stButton > button:active, .stDownloadButton > button:active { transform: scale(0.97); }
+        .stButton > button[kind="primary"] { background: var(--ios-blue); color:#fff; }
+        .stButton > button[kind="secondary"], .stDownloadButton > button {
+            background: var(--ios-fill); color: var(--ios-blue);
+        }
+        .stButton > button[kind="primary"]:hover { filter: brightness(1.05); color:#fff; }
+
+        /* Цветные акценты по ключам */
+        .st-key-start_btn button { background: var(--ios-green) !important; color:#fff !important; }
+        .st-key-stop_btn button   { background: var(--ios-red) !important; color:#fff !important; }
+
+        /* Поля ввода */
+        [data-testid="stNumberInput"] input,
+        [data-testid="stTextInput"] input,
+        [data-testid="stDateInput"] input,
+        [data-testid="stTimeInput"] input {
+            border-radius: 12px; font-size: 16px;
+        }
+
+        /* Вкладки -> сегмент-контрол iOS */
+        [data-testid="stTabs"] [role="tablist"] {
+            background: var(--ios-fill); border-radius: 12px; padding: 4px; gap: 4px;
+            border-bottom: none;
+        }
+        [data-testid="stTabs"] [role="tablist"] button {
+            flex: 1; border-radius: 9px; padding: 6px 4px; font-weight: 600;
+            color: #1C1C1E;
+        }
+        [data-testid="stTabs"] [role="tablist"] button[aria-selected="true"] {
+            background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        }
+        [data-testid="stTabs"] [data-baseweb="tab-highlight"],
+        [data-testid="stTabs"] [data-baseweb="tab-border"] { display: none; }
+
+        /* Метрики */
+        [data-testid="stMetricValue"] { font-size: 1.5rem; font-weight: 700; }
+
+        /* Заголовок секции (caption) */
+        .sec-label {
+            color: var(--ios-gray); font-size: 13px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.03em;
+            margin: 2px 0 2px 4px;
+        }
+        /* Большой таймер */
+        .big-timer {
+            text-align:center; font-size: 3.2rem; font-weight: 800;
+            font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+            margin: 4px 0 2px; color:#1C1C1E;
+        }
+        .timer-status { text-align:center; color: var(--ios-gray); font-weight:600; margin-bottom: 6px; }
+        .pay-now { text-align:center; font-size: 1.1rem; color:#1C1C1E; margin-top: 2px; }
+        .pay-big { text-align:center; color: var(--ios-green); font-weight:800; font-size: 2rem; margin: 6px 0; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+inject_css()
+st.markdown("<h1>🛠 Расчёт стоимости работы</h1>", unsafe_allow_html=True)
 
 # Хранилище в браузере телефона: данные остаются у тебя и переживают
 # перезапуск сервера. Время считается от момента старта, поэтому таймер
@@ -120,14 +221,14 @@ def message_with_copy(message, key):
     html_code = f"""
     <div style="font-family: -apple-system, system-ui, sans-serif;">
       <textarea id="ta_{key}" readonly
-        style="width:100%; height:300px; font-size:15px; padding:10px; box-sizing:border-box;
-               border:1px solid #ccc; border-radius:8px; resize:vertical;"></textarea>
+        style="width:100%; height:300px; font-size:15px; padding:12px; box-sizing:border-box;
+               border:1px solid #E5E5EA; border-radius:14px; resize:vertical; background:#F9F9FB;"></textarea>
       <button id="btn_{key}"
-        style="margin-top:8px; width:100%; padding:14px; font-size:16px; font-weight:600;
-               border:none; border-radius:8px; background:#2e7d32; color:#fff; cursor:pointer;">
+        style="margin-top:10px; width:100%; padding:14px; font-size:17px; font-weight:600;
+               border:none; border-radius:14px; background:#007AFF; color:#fff; cursor:pointer;">
         📋 Скопировать текст
       </button>
-      <div id="ok_{key}" style="text-align:center; color:#2e7d32; margin-top:8px; min-height:20px;"></div>
+      <div id="ok_{key}" style="text-align:center; color:#34C759; font-weight:600; margin-top:8px; min-height:20px;"></div>
     </div>
     <script>
       (function() {{
@@ -170,11 +271,12 @@ if "last_result" not in st.session_state:
     st.session_state.last_result = None  # результат после "Стоп", ждёт сохранения
 
 # ---------- общие параметры ----------
-st.subheader("⚙️ Параметры")
-rate = st.number_input("💵 Почасовая ставка ($)", min_value=0.0, value=60.0, step=5.0)
-materials = st.number_input("🧱 Материалы ($), необязательно", min_value=0.0, value=0.0, step=1.0)
+st.markdown('<div class="sec-label">Параметры</div>', unsafe_allow_html=True)
+with st.container(border=True):
+    rate = st.number_input("💵 Почасовая ставка ($)", min_value=0.0, value=60.0, step=5.0)
+    materials = st.number_input("🧱 Материалы ($), необязательно", min_value=0.0, value=0.0, step=1.0)
 
-tab_timer, tab_manual = st.tabs(["⏱ Таймер", "✍️ Ввести вручную"])
+tab_timer, tab_manual = st.tabs(["⏱ Таймер", "✍️ Вручную"])
 
 # =======================================================================
 #  Вкладка 1: живой таймер
@@ -183,106 +285,108 @@ with tab_timer:
     timer = get_timer()
     running = timer is not None and not timer.get("pause")
 
-    # Живое обновление секунд только пока таймер реально идёт
     if running:
         st_autorefresh(interval=1000, limit=None, key="refresh")
 
     if timer is None and st.session_state.last_result is None:
-        if st.button("▶️ Старт", use_container_width=True, type="primary"):
-            set_timer({"start": time.time(), "pause": None, "rate": rate, "materials": materials})
-            st.rerun()
-        st.info("Нажми «Старт», когда начинаешь работу у клиента.")
+        with st.container(border=True):
+            st.markdown(
+                '<p style="text-align:center;color:#8E8E93;margin:10px 0 14px;">'
+                'Нажми «Старт», когда начинаешь работу у клиента.</p>',
+                unsafe_allow_html=True,
+            )
+            if st.button("▶️ Старт", use_container_width=True, type="primary", key="start_btn"):
+                set_timer({"start": time.time(), "pause": None, "rate": rate, "materials": materials})
+                st.rerun()
 
     elif timer is not None:
         elapsed_td, hours, total = compute(timer)
         paused = bool(timer.get("pause"))
 
-        st.markdown(
-            f"<h1 style='text-align:center; font-variant-numeric: tabular-nums;'>⏱ {elapsed_td}</h1>",
-            unsafe_allow_html=True,
-        )
-        status = "⏸ На паузе" if paused else "🟢 Идёт"
-        st.markdown(f"<p style='text-align:center;'>{status}</p>", unsafe_allow_html=True)
-        st.write(f"💼 Оплачиваемое время: **{hours:.2f} ч**")
-        st.write(f"💰 К оплате сейчас: **${total:.2f}**")
+        with st.container(border=True):
+            st.markdown(f'<div class="big-timer">{elapsed_td}</div>', unsafe_allow_html=True)
+            status = "⏸ На паузе" if paused else "🟢 Идёт"
+            st.markdown(f'<div class="timer-status">{status}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="pay-now">💼 {hours:.2f} ч &nbsp;·&nbsp; 💰 <b>{money(total)}</b></div>',
+                unsafe_allow_html=True,
+            )
 
-        c1, c2 = st.columns(2)
-        if paused:
-            if c1.button("🔄 Продолжить", use_container_width=True):
-                paused_duration = time.time() - timer["pause"]
-                timer["start"] = timer["start"] + paused_duration
-                timer["pause"] = None
-                set_timer(timer)
-                st.rerun()
-        else:
-            if c1.button("⏸ Пауза", use_container_width=True):
-                timer["pause"] = time.time()
-                set_timer(timer)
-                st.rerun()
+            c1, c2 = st.columns(2)
+            if paused:
+                if c1.button("🔄 Продолжить", use_container_width=True, type="primary", key="resume_btn"):
+                    paused_duration = time.time() - timer["pause"]
+                    timer["start"] = timer["start"] + paused_duration
+                    timer["pause"] = None
+                    set_timer(timer)
+                    st.rerun()
+            else:
+                if c1.button("⏸ Пауза", use_container_width=True, key="pause_btn"):
+                    timer["pause"] = time.time()
+                    set_timer(timer)
+                    st.rerun()
 
-        if c2.button("⏹ Стоп", use_container_width=True, type="primary"):
-            elapsed_td, hours, total = compute(timer)
-            st.session_state.last_result = {
-                "elapsed": str(elapsed_td),
-                "hours": round(hours, 2),
-                "rate": timer.get("rate", 0),
-                "materials": timer.get("materials", 0),
-                "total": round(total, 2),
-                "start_clock": fmt_clock(datetime.fromtimestamp(timer["start"])),
-                "end_clock": fmt_clock(datetime.now()),
-            }
-            clear_timer()
-            st.rerun()
+            if c2.button("⏹ Стоп", use_container_width=True, type="primary", key="stop_btn"):
+                elapsed_td, hours, total = compute(timer)
+                st.session_state.last_result = {
+                    "elapsed": str(elapsed_td),
+                    "hours": round(hours, 2),
+                    "rate": timer.get("rate", 0),
+                    "materials": timer.get("materials", 0),
+                    "total": round(total, 2),
+                    "start_clock": fmt_clock(datetime.fromtimestamp(timer["start"])),
+                    "end_clock": fmt_clock(datetime.now()),
+                }
+                clear_timer()
+                st.rerun()
 
     # Результат после "Стоп": показать сумму и сохранить
     if st.session_state.last_result is not None:
         r = st.session_state.last_result
-        st.success("🛑 Работа завершена")
-        st.markdown(f"<h3>⏰ Общее время: {r['elapsed']}</h3>", unsafe_allow_html=True)
-        st.markdown(f"<h3>📦 Оплачиваемое время: {r['hours']:.2f} ч</h3>", unsafe_allow_html=True)
-        st.markdown(
-            f"<h2 style='color:green;'>💲 К оплате с клиента: ${r['total']:.2f}</h2>",
-            unsafe_allow_html=True,
-        )
+        with st.container(border=True):
+            st.markdown('<div style="text-align:center;font-weight:700;">🛑 Работа завершена</div>',
+                        unsafe_allow_html=True)
+            st.markdown(f'<div class="timer-status">⏰ {r["elapsed"]} · 📦 {r["hours"]:.2f} ч</div>',
+                        unsafe_allow_html=True)
+            st.markdown(f'<div class="pay-big">💲 К оплате: {money(r["total"])}</div>', unsafe_allow_html=True)
 
-        with st.expander("✉️ Текст для клиента"):
-            msg = build_message(
-                r.get("start_clock", ""), r.get("end_clock", ""), 0,
-                r["hours"], r["rate"], r["materials"], r["total"],
-            )
-            message_with_copy(msg, key="timer")
+            with st.expander("✉️ Текст для клиента"):
+                msg = build_message(
+                    r.get("start_clock", ""), r.get("end_clock", ""), 0,
+                    r["hours"], r["rate"], r["materials"], r["total"],
+                )
+                message_with_copy(msg, key="timer")
 
-        client = st.text_input("👤 Имя клиента", value="", placeholder="Например: Иван, кухня", key="t_client")
-        cc1, cc2 = st.columns(2)
-        if cc1.button("💾 Сохранить в историю", use_container_width=True, type="primary", key="t_save"):
-            add_history_entry(
-                datetime.now().strftime("%Y-%m-%d %H:%M"), client,
-                r["elapsed"], r["hours"], r["rate"], r["materials"], r["total"],
-            )
-            st.session_state.last_result = None
-            st.rerun()
-        if cc2.button("❌ Не сохранять", use_container_width=True, key="t_skip"):
-            st.session_state.last_result = None
-            st.rerun()
+            client = st.text_input("👤 Имя клиента", value="", placeholder="Например: Иван, кухня", key="t_client")
+            cc1, cc2 = st.columns(2)
+            if cc1.button("💾 Сохранить", use_container_width=True, type="primary", key="t_save"):
+                add_history_entry(
+                    datetime.now().strftime("%Y-%m-%d %H:%M"), client,
+                    r["elapsed"], r["hours"], r["rate"], r["materials"], r["total"],
+                )
+                st.session_state.last_result = None
+                st.rerun()
+            if cc2.button("❌ Не сохранять", use_container_width=True, key="t_skip"):
+                st.session_state.last_result = None
+                st.rerun()
 
 # =======================================================================
 #  Вкладка 2: ручной ввод времени + перерыв
 # =======================================================================
 with tab_manual:
-    st.caption("Если забыл нажать «Старт» — просто укажи, когда начал и закончил.")
-
-    work_date = st.date_input("📅 Дата работы", value=datetime.now().date(), key="m_date")
-    c1, c2 = st.columns(2)
-    start_t = c1.time_input("🕘 Начало", value=dt_time(9, 0), step=300, key="m_start")
-    end_t = c2.time_input("🕔 Конец", value=dt_time(17, 0), step=300, key="m_end")
-
-    # Перерыв: шаг 15 минут, кнопки −/+ у поля
-    break_min = st.number_input(
-        "☕ Перерыв (минут, шаг 15)", min_value=0, max_value=600, value=0, step=15, key="m_break"
-    )
-    if break_min:
-        st.caption(f"Перерыв: {break_min // 60} ч {break_min % 60} мин" if break_min >= 60
-                   else f"Перерыв: {break_min} мин")
+    with st.container(border=True):
+        st.markdown(
+            '<p style="color:#8E8E93;margin:2px 0 10px;">'
+            'Если забыл нажать «Старт» — укажи, когда начал и закончил.</p>',
+            unsafe_allow_html=True,
+        )
+        work_date = st.date_input("📅 Дата работы", value=datetime.now().date(), key="m_date")
+        c1, c2 = st.columns(2)
+        start_t = c1.time_input("🕘 Начало", value=dt_time(9, 0), step=300, key="m_start")
+        end_t = c2.time_input("🕔 Конец", value=dt_time(17, 0), step=300, key="m_end")
+        break_min = st.number_input(
+            "☕ Перерыв (минут, шаг 15)", min_value=0, max_value=600, value=0, step=15, key="m_break"
+        )
 
     start_dt = datetime.combine(work_date, start_t)
     end_dt = datetime.combine(work_date, end_t)
@@ -299,74 +403,76 @@ with tab_manual:
             hours = worked_seconds / 3600
             total = hours * rate + materials
 
-            st.divider()
-            st.write(f"🕒 Интервал: **{fmt_hms(total_seconds)}**  (минус перерыв {break_min} мин)")
-            st.write(f"💼 Оплачиваемое время: **{hours:.2f} ч**")
-            if materials:
-                st.write(f"🧱 Материалы: **${materials:.2f}**")
-            st.markdown(
-                f"<h2 style='color:green;'>💲 К оплате с клиента: ${total:.2f}</h2>",
-                unsafe_allow_html=True,
-            )
-
-            with st.expander("✉️ Текст для клиента"):
-                msg = build_message(
-                    fmt_clock(start_t), fmt_clock(end_t), break_min,
-                    hours, rate, materials, total,
+            with st.container(border=True):
+                st.markdown(
+                    f'<div class="timer-status" style="margin-top:4px;">'
+                    f'🕒 {fmt_hms(total_seconds)} − перерыв {break_min} мин · 💼 {hours:.2f} ч</div>',
+                    unsafe_allow_html=True,
                 )
-                message_with_copy(msg, key="manual")
+                st.markdown(f'<div class="pay-big">💲 К оплате: {money(total)}</div>', unsafe_allow_html=True)
 
-            client = st.text_input("👤 Имя клиента", value="", placeholder="Например: Иван, кухня", key="m_client")
-            if st.button("💾 Сохранить в историю", use_container_width=True, type="primary", key="m_save"):
-                add_history_entry(
-                    f"{work_date:%Y-%m-%d} {start_t:%H:%M}–{end_t:%H:%M}",
-                    client, fmt_hms(worked_seconds), hours, rate, materials, total,
-                    break_min=break_min,
-                )
-                st.toast("💾 Работа сохранена в историю")
+                with st.expander("✉️ Текст для клиента"):
+                    msg = build_message(
+                        fmt_clock(start_t), fmt_clock(end_t), break_min,
+                        hours, rate, materials, total,
+                    )
+                    message_with_copy(msg, key="manual")
+
+                client = st.text_input("👤 Имя клиента", value="", placeholder="Например: Иван, кухня", key="m_client")
+                if st.button("💾 Сохранить", use_container_width=True, type="primary", key="m_save"):
+                    add_history_entry(
+                        f"{work_date:%Y-%m-%d} {start_t:%H:%M}–{end_t:%H:%M}",
+                        client, fmt_hms(worked_seconds), hours, rate, materials, total,
+                        break_min=break_min,
+                    )
+                    st.toast("💾 Работа сохранена в историю")
 
 # =======================================================================
 #  История работ (общая для обеих вкладок)
 # =======================================================================
-st.divider()
-st.subheader("📜 История работ")
+st.markdown('<div class="sec-label" style="margin-top:14px;">История работ</div>', unsafe_allow_html=True)
 
 history = get_history()
-if history:
-    total_earned = 0.0
-    rows = []
-    for item in history:
-        try:
-            total_earned += float(item.get("total", 0) or 0)
-        except (ValueError, TypeError):
-            pass
-        rows.append({
-            "Дата": item.get("date", ""),
-            "Клиент": item.get("client", ""),
-            "Время": item.get("elapsed", ""),
-            "Перерыв": item.get("break", 0),
-            "Часы": item.get("hours", ""),
-            "Сумма $": item.get("total", ""),
-        })
+with st.container(border=True):
+    if history:
+        total_earned = 0.0
+        rows = []
+        for item in history:
+            try:
+                total_earned += float(item.get("total", 0) or 0)
+            except (ValueError, TypeError):
+                pass
+            rows.append({
+                "Дата": item.get("date", ""),
+                "Клиент": item.get("client", ""),
+                "Время": item.get("elapsed", ""),
+                "Перерыв": item.get("break", 0),
+                "Часы": item.get("hours", ""),
+                "Сумма $": item.get("total", ""),
+            })
 
-    m1, m2 = st.columns(2)
-    m1.metric("Всего работ", len(history))
-    m2.metric("💰 Всего заработано", f"${total_earned:.2f}")
+        m1, m2 = st.columns(2)
+        m1.metric("Всего работ", len(history))
+        m2.metric("💰 Заработано", money(total_earned))
 
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, use_container_width=True, hide_index=True)
 
-    st.download_button(
-        "⬇️ Скачать историю (JSON)",
-        data=json.dumps(history, ensure_ascii=False, indent=2),
-        file_name="history.json",
-        mime="application/json",
-        use_container_width=True,
-    )
+        st.download_button(
+            "⬇️ Скачать историю (JSON)",
+            data=json.dumps(history, ensure_ascii=False, indent=2),
+            file_name="history.json",
+            mime="application/json",
+            use_container_width=True,
+        )
 
-    with st.expander("🗑 Очистить историю"):
-        st.warning("Это удалит все сохранённые работы без возможности восстановления.")
-        if st.button("Да, удалить всё", type="primary"):
-            localS.deleteItem(HISTORY_KEY, key="del_history")
-            st.rerun()
-else:
-    st.caption("Пока нет сохранённых работ. Заверши работу и сохрани её.")
+        with st.expander("🗑 Очистить историю"):
+            st.warning("Это удалит все сохранённые работы без возможности восстановления.")
+            if st.button("Да, удалить всё", type="primary"):
+                localS.deleteItem(HISTORY_KEY, key="del_history")
+                st.rerun()
+    else:
+        st.markdown(
+            '<p style="text-align:center;color:#8E8E93;margin:10px 0;">'
+            'Пока нет сохранённых работ.<br>Заверши работу и сохрани её.</p>',
+            unsafe_allow_html=True,
+        )
