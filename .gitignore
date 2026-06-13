@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# App runtime/state files
+start_time.txt
+pause_time.txt
+history.csv
