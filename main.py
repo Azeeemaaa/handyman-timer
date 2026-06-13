@@ -269,6 +269,8 @@ def compute(timer):
 # ---------- состояние ----------
 if "last_result" not in st.session_state:
     st.session_state.last_result = None  # результат после "Стоп", ждёт сохранения
+if "show_msg_running" not in st.session_state:
+    st.session_state.show_msg_running = False  # показывать текст клиенту во время таймера
 
 # ---------- общие параметры ----------
 st.markdown('<div class="sec-label">Параметры</div>', unsafe_allow_html=True)
@@ -285,7 +287,8 @@ with tab_timer:
     timer = get_timer()
     running = timer is not None and not timer.get("pause")
 
-    if running:
+    # Пока показываем текст клиенту — замораживаем автообновление (время не теряется)
+    if running and not st.session_state.show_msg_running:
         st_autorefresh(interval=1000, limit=None, key="refresh")
 
     if timer is None and st.session_state.last_result is None:
@@ -297,6 +300,7 @@ with tab_timer:
             )
             if st.button("▶️ Старт", use_container_width=True, type="primary", key="start_btn"):
                 set_timer({"start": time.time(), "pause": None, "rate": rate, "materials": materials})
+                st.session_state.show_msg_running = False
                 st.rerun()
 
     elif timer is not None:
@@ -337,8 +341,27 @@ with tab_timer:
                     "start_clock": fmt_clock(datetime.fromtimestamp(timer["start"])),
                     "end_clock": fmt_clock(datetime.now()),
                 }
+                st.session_state.show_msg_running = False
                 clear_timer()
                 st.rerun()
+
+            # Текст для клиента прямо во время работы
+            st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
+            if not st.session_state.show_msg_running:
+                if st.button("✉️ Текст для клиента", use_container_width=True, key="show_msg_btn"):
+                    st.session_state.show_msg_running = True
+                    st.rerun()
+            else:
+                msg = build_message(
+                    fmt_clock(datetime.fromtimestamp(timer["start"])),
+                    fmt_clock(datetime.now()), 0,
+                    hours, timer.get("rate", 0), timer.get("materials", 0), total,
+                )
+                message_with_copy(msg, key="timer_live")
+                st.caption("⏱ Таймер продолжает идти — время не теряется.")
+                if st.button("⬅️ Скрыть и продолжить", use_container_width=True, key="hide_msg_btn"):
+                    st.session_state.show_msg_running = False
+                    st.rerun()
 
     # Результат после "Стоп": показать сумму и сохранить
     if st.session_state.last_result is not None:
