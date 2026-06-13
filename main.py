@@ -1,209 +1,204 @@
-import streamlit as st
 import time
-import os
-import csv
+import json
 from datetime import datetime, timedelta
+
+import streamlit as st
+from streamlit_local_storage import LocalStorage
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Калькулятор хэндимена", layout="centered")
 st.title("🛠 Калькулятор стоимости работы")
 
-start_file = "start_time.txt"
-pause_file = "pause_time.txt"
-history_file = "history.csv"
+# Хранилище в браузере телефона: данные остаются у тебя и переживают
+# перезапуск сервера. Время считается от момента старта, поэтому таймер
+# "идёт" даже когда приложение закрыто.
+localS = LocalStorage()
 
-HISTORY_FIELDS = ["date", "client", "elapsed", "billable_hours", "rate", "materials", "total"]
+TIMER_KEY = "ht_timer"      # активный таймер: {"start": ts, "pause": ts|null, "rate": r, "materials": m}
+HISTORY_KEY = "ht_history"  # список завершённых работ
 
-# --- работа с историей ---
-def load_history():
-    if not os.path.exists(history_file):
+
+# ---------- работа с хранилищем ----------
+def get_timer():
+    raw = localS.getItem(TIMER_KEY)
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+
+
+def set_timer(data):
+    localS.setItem(TIMER_KEY, json.dumps(data), key="set_timer")
+
+
+def clear_timer():
+    if localS.getItem(TIMER_KEY):
+        localS.deleteItem(TIMER_KEY, key="del_timer")
+
+
+def get_history():
+    raw = localS.getItem(HISTORY_KEY)
+    if not raw:
         return []
-    rows = []
-    with open(history_file, "r", newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            rows.append(row)
-    return rows
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return []
 
-def save_history_entry(entry):
-    file_exists = os.path.exists(history_file)
-    with open(history_file, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=HISTORY_FIELDS)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(entry)
 
-def clear_history():
-    if os.path.exists(history_file):
-        os.remove(history_file)
+def set_history(items):
+    localS.setItem(HISTORY_KEY, json.dumps(items), key="set_history")
 
-# --- состояние ---
-if "paused" not in st.session_state:
-    st.session_state.paused = False
-if "stop_pressed" not in st.session_state:
-    st.session_state.stop_pressed = False
-if "stop_data" not in st.session_state:
-    st.session_state.stop_data = None
 
-# --- автообновление ---
-if not st.session_state.stop_pressed:
-    st_autorefresh(interval=2000, limit=None, key="refresh")
+def compute(timer):
+    """Возвращает (elapsed_td, hours, total) для текущего состояния таймера."""
+    start = timer["start"]
+    now = timer["pause"] if timer.get("pause") else time.time()
+    elapsed_seconds = max(0.0, now - start)
+    hours = elapsed_seconds / 3600
+    total = hours * timer.get("rate", 0) + timer.get("materials", 0)
+    return timedelta(seconds=int(elapsed_seconds)), hours, total
 
-# --- ввод данных ---
-client = st.text_input("👤 Клиент / описание работы", value="")
-rate = st.number_input("💵 Почасовая ставка ($)", min_value=0.0, value=60.0, step=1.0)
-materials = st.number_input("🧱 Стоимость материалов ($)", min_value=0.0, value=0.0, step=1.0)
-min_hours = 0.0  # фиксированно 0
 
-# ▶️ Старт
-if st.button("▶️ Старт таймера"):
-    with open(start_file, "w") as f:
-        f.write(str(time.time()))
-    if os.path.exists(pause_file):
-        os.remove(pause_file)
-    st.session_state.paused = False
-    st.session_state.stop_pressed = False
-    st.session_state.stop_data = None
-    st.success("✅ Таймер запущен!")
+# ---------- состояние ----------
+if "last_result" not in st.session_state:
+    st.session_state.last_result = None  # результат после "Стоп", ждёт сохранения
 
-# ⏸ Пауза
-if st.button("⏸ Пауза"):
-    if os.path.exists(start_file) and not os.path.exists(pause_file):
-        with open(pause_file, "w") as f:
-            f.write(str(time.time()))
-        st.session_state.paused = True
-        st.info("⏸ Таймер на паузе")
+timer = get_timer()
+running = timer is not None and not timer.get("pause")
 
-# ▶️ Продолжить
-if st.button("🔄 Продолжить"):
-    if os.path.exists(start_file) and os.path.exists(pause_file):
-        with open(start_file, "r") as f:
-            start_time = float(f.read())
-        with open(pause_file, "r") as f:
-            pause_time = float(f.read())
-        paused_duration = time.time() - pause_time
-        new_start_time = start_time + paused_duration
-        with open(start_file, "w") as f:
-            f.write(str(new_start_time))
-        os.remove(pause_file)
-        st.session_state.paused = False
-        st.success("▶️ Таймер возобновлён")
+# Живое обновление секунд только пока таймер реально идёт
+if running:
+    st_autorefresh(interval=1000, limit=None, key="refresh")
 
-# 🗑 Сброс
-if st.button("🗑 Сбросить таймер"):
-    if os.path.exists(start_file):
-        os.remove(start_file)
-    if os.path.exists(pause_file):
-        os.remove(pause_file)
-    st.session_state.paused = False
-    st.session_state.stop_pressed = False
-    st.session_state.stop_data = None
-    st.info("♻️ Таймер сброшен")
+# ---------- ввод ставки ----------
+st.subheader("⚙️ Параметры")
+rate = st.number_input("💵 Почасовая ставка ($)", min_value=0.0, value=60.0, step=5.0)
+materials = st.number_input("🧱 Материалы ($), необязательно", min_value=0.0, value=0.0, step=1.0)
 
-# 🔢 Отображение таймера или итогов
-if os.path.exists(start_file):
-    with open(start_file, "r") as f:
-        start_time = float(f.read())
-    now = time.time()
-    if os.path.exists(pause_file):
-        with open(pause_file, "r") as f:
-            now = float(f.read())  # время паузы фиксируем
-    elapsed_seconds = now - start_time
-    elapsed_td = timedelta(seconds=int(elapsed_seconds))
-    elapsed_hours = elapsed_seconds / 3600
-    billable_hours = max(elapsed_hours, min_hours)
-    total_cost = billable_hours * rate + materials
+st.divider()
 
-    if st.session_state.stop_pressed:
-        st.success("🛑 Таймер остановлен.")
-        st.markdown(f"<h3>⏰ Общее время: {st.session_state.stop_data['elapsed_td']}</h3>", unsafe_allow_html=True)
-        st.markdown(f"<h3>📦 Оплачиваемое время: {st.session_state.stop_data['billable_hours']:.2f} ч</h3>", unsafe_allow_html=True)
-        st.markdown(f"<h2 style='color:green;'>💲 Итоговая сумма: ${st.session_state.stop_data['total_cost']:.2f}</h2>", unsafe_allow_html=True)
+# ---------- управление таймером ----------
+if timer is None and st.session_state.last_result is None:
+    # таймер не запущен
+    if st.button("▶️ Старт", use_container_width=True, type="primary"):
+        set_timer({"start": time.time(), "pause": None, "rate": rate, "materials": materials})
+        st.rerun()
+    st.info("Нажми «Старт», когда начинаешь работу у клиента.")
+
+elif timer is not None:
+    # таймер запущен (идёт или на паузе)
+    elapsed_td, hours, total = compute(timer)
+    paused = bool(timer.get("pause"))
+
+    st.markdown(
+        f"<h1 style='text-align:center; font-variant-numeric: tabular-nums;'>⏱ {elapsed_td}</h1>",
+        unsafe_allow_html=True,
+    )
+    status = "⏸ На паузе" if paused else "🟢 Идёт"
+    st.markdown(f"<p style='text-align:center;'>{status}</p>", unsafe_allow_html=True)
+    st.write(f"💼 Оплачиваемое время: **{hours:.2f} ч**")
+    st.write(f"💰 К оплате сейчас: **${total:.2f}**")
+
+    c1, c2 = st.columns(2)
+    if paused:
+        if c1.button("🔄 Продолжить", use_container_width=True):
+            # сдвигаем старт на длительность паузы, чтобы не считать время простоя
+            paused_duration = time.time() - timer["pause"]
+            timer["start"] = timer["start"] + paused_duration
+            timer["pause"] = None
+            set_timer(timer)
+            st.rerun()
     else:
-        st.info(f"⏳ Прошло времени: **{elapsed_td}**")
-        st.write(f"💼 Оплачиваемое время: **{billable_hours:.2f} ч**")
-        st.write(f"💰 Ставка + материалы: **${total_cost:.2f}**")
+        if c1.button("⏸ Пауза", use_container_width=True):
+            timer["pause"] = time.time()
+            set_timer(timer)
+            st.rerun()
 
-# ⏹ Стоп
-if st.button("⏹ Стоп таймера"):
-    if os.path.exists(start_file):
-        with open(start_file, "r") as f:
-            start_time = float(f.read())
-        now = time.time()
-        if os.path.exists(pause_file):
-            with open(pause_file, "r") as f:
-                now = float(f.read())
-        elapsed_seconds = now - start_time
-        elapsed_td = timedelta(seconds=int(elapsed_seconds))
-        elapsed_hours = elapsed_seconds / 3600
-        billable_hours = max(elapsed_hours, min_hours)
-        total_cost = billable_hours * rate + materials
-
-        st.session_state.stop_data = {
-            "elapsed_td": elapsed_td,
-            "billable_hours": billable_hours,
-            "total_cost": total_cost
+    if c2.button("⏹ Стоп", use_container_width=True, type="primary"):
+        elapsed_td, hours, total = compute(timer)
+        st.session_state.last_result = {
+            "elapsed": str(elapsed_td),
+            "hours": round(hours, 2),
+            "rate": timer.get("rate", 0),
+            "materials": timer.get("materials", 0),
+            "total": round(total, 2),
         }
-        st.session_state.stop_pressed = True
-        st.session_state.paused = False
+        clear_timer()
+        st.rerun()
 
-        # 💾 Сохраняем работу в историю
-        save_history_entry({
+# ---------- результат после "Стоп": показать сумму и сохранить ----------
+if st.session_state.last_result is not None:
+    r = st.session_state.last_result
+    st.success("🛑 Работа завершена")
+    st.markdown(f"<h3>⏰ Общее время: {r['elapsed']}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h3>📦 Оплачиваемое время: {r['hours']:.2f} ч</h3>", unsafe_allow_html=True)
+    st.markdown(
+        f"<h2 style='color:green;'>💲 К оплате с клиента: ${r['total']:.2f}</h2>",
+        unsafe_allow_html=True,
+    )
+
+    client = st.text_input("👤 Имя клиента", value="", placeholder="Например: Иван, кухня")
+    cc1, cc2 = st.columns(2)
+    if cc1.button("💾 Сохранить в историю", use_container_width=True, type="primary"):
+        history = get_history()
+        history.insert(0, {
             "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "client": client.strip() or "—",
-            "elapsed": str(elapsed_td),
-            "billable_hours": f"{billable_hours:.2f}",
-            "rate": f"{rate:.2f}",
-            "materials": f"{materials:.2f}",
-            "total": f"{total_cost:.2f}",
+            "elapsed": r["elapsed"],
+            "hours": r["hours"],
+            "rate": r["rate"],
+            "materials": r["materials"],
+            "total": r["total"],
         })
-        st.success("💾 Работа сохранена в историю")
+        set_history(history)
+        st.session_state.last_result = None
+        st.rerun()
+    if cc2.button("❌ Не сохранять", use_container_width=True):
+        st.session_state.last_result = None
+        st.rerun()
 
-# 📜 История работ
+# ---------- история работ ----------
 st.divider()
 st.subheader("📜 История работ")
 
-history = load_history()
+history = get_history()
 if history:
-    # таблица для отображения с понятными заголовками
-    display_rows = []
     total_earned = 0.0
-    for row in history:
+    rows = []
+    for item in history:
         try:
-            total_earned += float(row.get("total", 0) or 0)
-        except ValueError:
+            total_earned += float(item.get("total", 0) or 0)
+        except (ValueError, TypeError):
             pass
-        display_rows.append({
-            "Дата": row.get("date", ""),
-            "Клиент": row.get("client", ""),
-            "Время": row.get("elapsed", ""),
-            "Часы": row.get("billable_hours", ""),
-            "Ставка $": row.get("rate", ""),
-            "Материалы $": row.get("materials", ""),
-            "Сумма $": row.get("total", ""),
+        rows.append({
+            "Дата": item.get("date", ""),
+            "Клиент": item.get("client", ""),
+            "Время": item.get("elapsed", ""),
+            "Часы": item.get("hours", ""),
+            "Сумма $": item.get("total", ""),
         })
 
-    st.dataframe(display_rows, use_container_width=True, hide_index=True)
+    m1, m2 = st.columns(2)
+    m1.metric("Всего работ", len(history))
+    m2.metric("💰 Всего заработано", f"${total_earned:.2f}")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Всего работ", len(history))
-    with col2:
-        st.metric("Общий заработок", f"${total_earned:.2f}")
+    st.dataframe(rows, use_container_width=True, hide_index=True)
 
-    # ⬇️ Скачать историю
-    with open(history_file, "r", encoding="utf-8") as f:
-        csv_data = f.read()
     st.download_button(
-        "⬇️ Скачать историю (CSV)",
-        data=csv_data,
-        file_name="history.csv",
-        mime="text/csv",
+        "⬇️ Скачать историю (JSON)",
+        data=json.dumps(history, ensure_ascii=False, indent=2),
+        file_name="history.json",
+        mime="application/json",
+        use_container_width=True,
     )
 
-    # 🗑 Очистить историю
-    if st.button("🗑 Очистить историю"):
-        clear_history()
-        st.rerun()
+    with st.expander("🗑 Очистить историю"):
+        st.warning("Это удалит все сохранённые работы без возможности восстановления.")
+        if st.button("Да, удалить всё", type="primary"):
+            localS.deleteItem(HISTORY_KEY, key="del_history")
+            st.rerun()
 else:
-    st.caption("Пока нет сохранённых работ. Нажмите «⏹ Стоп таймера», чтобы сохранить работу.")
+    st.caption("Пока нет сохранённых работ. Заверши работу кнопкой «Стоп» и сохрани её.")
