@@ -355,11 +355,11 @@ if "show_msg_running" not in st.session_state:
 
 # ---------- общие параметры ----------
 with st.container(border=True):
-    rate = st.number_input("💵 Почасовая ставка ($)", min_value=100.0, value=100.0, step=5.0)
+    rate = st.number_input("💵 Почасовая ставка ($)", min_value=0.0, value=65.0, step=5.0)
     materials = st.number_input("🧱 Материалы ($), необязательно", min_value=0.0, value=0.0, step=1.0)
     st.markdown(
-        f'<div class="total-row"><span>ⓘ Базовая стоимость (1 ч + материалы)</span>'
-        f'<span class="val">{money(rate + materials)}</span></div>',
+        '<div class="total-row"><span>ⓘ Минимальная базовая цена</span>'
+        '<span class="val">$100</span></div>',
         unsafe_allow_html=True,
     )
 
@@ -402,8 +402,7 @@ with tab_timer:
             status = "⏸ На паузе" if paused else "🟢 Идёт"
             st.markdown(f'<div class="timer-status">{status}</div>', unsafe_allow_html=True)
             st.markdown(
-                f'<div class="pay-now">💼 {hours:.2f} ч &nbsp;·&nbsp; 💰 <b>{money(total)}</b></div>'
-                f'<div style="text-align:center"><span class="chip">⚡ {money(timer.get("rate", 0))}/час</span></div>',
+                f'<div class="pay-now">💼 {hours:.2f} ч &nbsp;·&nbsp; 💰 <b>{money(total)}</b></div>',
                 unsafe_allow_html=True,
             )
             st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
