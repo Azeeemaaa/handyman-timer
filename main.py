@@ -403,7 +403,7 @@ with tab_timer:
             st.markdown(f'<div class="timer-status">{status}</div>', unsafe_allow_html=True)
             st.markdown(
                 f'<div class="pay-now" style="margin-bottom:14px">'
-                f'💼 {hours:.2f} ч &nbsp;·&nbsp; 💰 <b>{money(total)}</b></div>',
+                f'💰 Заработано: <b>{money(total)}</b></div>',
                 unsafe_allow_html=True,
             )
 
@@ -459,7 +459,7 @@ with tab_timer:
         with st.container(border=True):
             st.markdown('<div style="text-align:center;font-weight:700;">🛑 Работа завершена</div>',
                         unsafe_allow_html=True)
-            st.markdown(f'<div class="timer-status">⏰ {r["elapsed"]} · 📦 {r["hours"]:.2f} ч</div>',
+            st.markdown(f'<div class="timer-status">⏰ Время работы: {r["elapsed"]}</div>',
                         unsafe_allow_html=True)
             st.markdown(f'<div class="pay-big">💲 К оплате: {money(r["total"])}</div>', unsafe_allow_html=True)
 
