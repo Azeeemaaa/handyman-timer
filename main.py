@@ -402,10 +402,10 @@ with tab_timer:
             status = "⏸ На паузе" if paused else "🟢 Идёт"
             st.markdown(f'<div class="timer-status">{status}</div>', unsafe_allow_html=True)
             st.markdown(
-                f'<div class="pay-now">💼 {hours:.2f} ч &nbsp;·&nbsp; 💰 <b>{money(total)}</b></div>',
+                f'<div class="pay-now" style="margin-bottom:14px">'
+                f'💼 {hours:.2f} ч &nbsp;·&nbsp; 💰 <b>{money(total)}</b></div>',
                 unsafe_allow_html=True,
             )
-            st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
 
             if paused:
                 if st.button("🔄 Продолжить", use_container_width=True, type="primary", key="resume_btn"):
