@@ -195,6 +195,7 @@ localS = LocalStorage()
 
 TIMER_KEY = "ht_timer"      # активный таймер: {"start": ts, "pause": ts|null, "rate": r, "materials": m}
 HISTORY_KEY = "ht_history"  # список завершённых работ
+MIN_TOTAL = 100.0           # минимальная итоговая цена за работу ($), даже за пару минут
 
 
 # ---------- работа с хранилищем ----------
@@ -284,6 +285,11 @@ def build_message(start_str, end_str, break_min, hours, rate, materials, total):
         "",
         f"Labor: {fmt_hours(hours)}h - {money(labor)}",
         f"Materials – {money(materials)}",
+    ]
+    # Если сработала минимальная цена — поясняем клиенту, почему итог выше суммы строк
+    if round(labor + materials, 2) < round(total, 2):
+        lines.append(f"Minimum service charge: {money(total)}")
+    lines += [
         "",
         f"Total: {money(total)}",
         "",
@@ -339,7 +345,7 @@ def compute(timer):
     now = timer["pause"] if timer.get("pause") else time.time()
     elapsed_seconds = max(0.0, now - start)
     hours = elapsed_seconds / 3600
-    total = hours * timer.get("rate", 0) + timer.get("materials", 0)
+    total = max(hours * timer.get("rate", 0) + timer.get("materials", 0), MIN_TOTAL)
     return timedelta(seconds=int(elapsed_seconds)), hours, total
 
 
@@ -510,7 +516,7 @@ with tab_manual:
             st.warning("⚠️ Перерыв больше или равен отработанному времени.")
         else:
             hours = worked_seconds / 3600
-            total = hours * rate + materials
+            total = max(hours * rate + materials, MIN_TOTAL)
 
             with st.container(border=True):
                 st.markdown(
