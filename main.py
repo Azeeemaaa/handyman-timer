@@ -278,7 +278,7 @@ with st.container(border=True):
     rate = st.number_input("💵 Почасовая ставка ($)", min_value=0.0, value=60.0, step=5.0)
     materials = st.number_input("🧱 Материалы ($), необязательно", min_value=0.0, value=0.0, step=1.0)
 
-tab_timer, tab_manual = st.tabs(["⏱ Таймер", "✍️ Вручную"])
+tab_timer, tab_manual, tab_history = st.tabs(["⏱ Таймер", "✍️ Вручную", "📋 История"])
 
 # =======================================================================
 #  Вкладка 1: живой таймер
@@ -451,51 +451,50 @@ with tab_manual:
                     st.toast("💾 Работа сохранена в историю")
 
 # =======================================================================
-#  История работ (общая для обеих вкладок)
+#  Вкладка 3: история работ
 # =======================================================================
-st.markdown('<div class="sec-label" style="margin-top:14px;">История работ</div>', unsafe_allow_html=True)
+with tab_history:
+    history = get_history()
+    with st.container(border=True):
+        if history:
+            total_earned = 0.0
+            rows = []
+            for item in history:
+                try:
+                    total_earned += float(item.get("total", 0) or 0)
+                except (ValueError, TypeError):
+                    pass
+                rows.append({
+                    "Дата": item.get("date", ""),
+                    "Клиент": item.get("client", ""),
+                    "Время": item.get("elapsed", ""),
+                    "Перерыв": item.get("break", 0),
+                    "Часы": item.get("hours", ""),
+                    "Сумма $": item.get("total", ""),
+                })
 
-history = get_history()
-with st.container(border=True):
-    if history:
-        total_earned = 0.0
-        rows = []
-        for item in history:
-            try:
-                total_earned += float(item.get("total", 0) or 0)
-            except (ValueError, TypeError):
-                pass
-            rows.append({
-                "Дата": item.get("date", ""),
-                "Клиент": item.get("client", ""),
-                "Время": item.get("elapsed", ""),
-                "Перерыв": item.get("break", 0),
-                "Часы": item.get("hours", ""),
-                "Сумма $": item.get("total", ""),
-            })
+            m1, m2 = st.columns(2)
+            m1.metric("Всего работ", len(history))
+            m2.metric("💰 Заработано", money(total_earned))
 
-        m1, m2 = st.columns(2)
-        m1.metric("Всего работ", len(history))
-        m2.metric("💰 Заработано", money(total_earned))
+            st.dataframe(rows, use_container_width=True, hide_index=True)
 
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+            st.download_button(
+                "⬇️ Скачать историю (JSON)",
+                data=json.dumps(history, ensure_ascii=False, indent=2),
+                file_name="history.json",
+                mime="application/json",
+                use_container_width=True,
+            )
 
-        st.download_button(
-            "⬇️ Скачать историю (JSON)",
-            data=json.dumps(history, ensure_ascii=False, indent=2),
-            file_name="history.json",
-            mime="application/json",
-            use_container_width=True,
-        )
-
-        with st.expander("🗑 Очистить историю"):
-            st.warning("Это удалит все сохранённые работы без возможности восстановления.")
-            if st.button("Да, удалить всё", type="primary"):
-                localS.deleteItem(HISTORY_KEY, key="del_history")
-                st.rerun()
-    else:
-        st.markdown(
-            '<p style="text-align:center;color:#8E8E93;margin:10px 0;">'
-            'Пока нет сохранённых работ.<br>Заверши работу и сохрани её.</p>',
-            unsafe_allow_html=True,
-        )
+            with st.expander("🗑 Очистить историю"):
+                st.warning("Это удалит все сохранённые работы без возможности восстановления.")
+                if st.button("Да, удалить всё", type="primary"):
+                    localS.deleteItem(HISTORY_KEY, key="del_history")
+                    st.rerun()
+        else:
+            st.markdown(
+                '<p style="text-align:center;color:#8E8E93;margin:10px 0;">'
+                'Пока нет сохранённых работ.<br>Заверши работу и сохрани её.</p>',
+                unsafe_allow_html=True,
+            )
