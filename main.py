@@ -198,6 +198,21 @@ HISTORY_KEY = "ht_history"  # список завершённых работ
 MIN_TOTAL = 100.0           # минимальная итоговая цена за работу ($), даже за пару минут
 
 
+# Серверное хранилище активного таймера: один словарь, живущий в памяти
+# процесса приложения (общий для всех подключений — приложение личное, таймер
+# один за раз). Главный плюс: переживает полное закрытие телефона, потерю
+# параметров URL и сброс localStorage на iPhone — то есть ровно сценарий
+# "нажал старт → закрыл приложение → через час открыл". Живёт, пока жив
+# процесс на Streamlit Cloud (до «засыпания» приложения); на этот редкий
+# случай резервом остаётся localStorage.
+@st.cache_resource
+def _server_store():
+    return {}
+
+
+SERVER_TIMER_KEY = "active_timer"
+
+
 # ---------- работа с хранилищем ----------
 # Активный таймер держим в параметрах URL (st.query_params): они читаются
 # мгновенно и синхронно, поэтому переживают перезагрузку страницы и
@@ -234,11 +249,18 @@ def _timer_to_query(data):
 
 
 def get_timer():
-    # 1) URL — основной источник, без асинхронной гонки
+    # 1) URL — мгновенно и синхронно, в пределах текущей вкладки
     timer = _timer_from_query()
     if timer is not None:
+        _server_store()[SERVER_TIMER_KEY] = timer
         return timer
-    # 2) Резерв: localStorage (например, первое открытие по чистому адресу)
+    # 2) Сервер — главный надёжный источник: переживает закрытие телефона,
+    #    потерю адреса и сброс localStorage. Читается сразу, без гонки.
+    timer = _server_store().get(SERVER_TIMER_KEY)
+    if timer is not None:
+        _timer_to_query(timer)
+        return timer
+    # 3) localStorage — резерв на случай перезапуска сервера
     raw = localS.getItem(TIMER_KEY)
     if not raw:
         return None
@@ -246,13 +268,15 @@ def get_timer():
         timer = json.loads(raw)
     except (ValueError, TypeError):
         return None
-    # Восстановили из резерва — сразу пишем в URL, чтобы пережить перезагрузки
+    # Восстановили из резерва — раскладываем по серверу и URL
+    _server_store()[SERVER_TIMER_KEY] = timer
     _timer_to_query(timer)
     return timer
 
 
 def set_timer(data):
     _timer_to_query(data)
+    _server_store()[SERVER_TIMER_KEY] = data
     localS.setItem(TIMER_KEY, json.dumps(data), key="set_timer")
 
 
@@ -260,6 +284,7 @@ def clear_timer():
     for k in _QP_KEYS:
         if k in st.query_params:
             del st.query_params[k]
+    _server_store().pop(SERVER_TIMER_KEY, None)
     if localS.getItem(TIMER_KEY):
         localS.deleteItem(TIMER_KEY, key="del_timer")
 
