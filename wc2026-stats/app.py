@@ -470,10 +470,6 @@ def main() -> None:
     with tab3:
         st.subheader("Стоимость сборных — Топ-20")
         st.caption("Источник: Transfermarkt · € млн")
-        if st.button("🔄 Обновить", key="upd_values"):
-            v = safe_fetch(fetch_values, "Стоимость сборных")
-            if v is not None:
-                st.session_state.team_values = v
         render_values(st.session_state.team_values)
 
 
