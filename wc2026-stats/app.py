@@ -415,9 +415,11 @@ def main() -> None:
         st.session_state.scorers = {"updated": None, "items": []}
     if "assists" not in st.session_state:
         st.session_state.assists = {"updated": None, "items": []}
-    if "values" not in st.session_state:
+    if "team_values" not in st.session_state:
         # Стартовый снимок, чтобы раздел не был пустым.
-        st.session_state.values = VALUE_SNAPSHOT
+        # ВНИМАНИЕ: ключ называется team_values, а не values —
+        # имя "values" конфликтует с методом st.session_state.values().
+        st.session_state.team_values = VALUE_SNAPSHOT
 
     st.markdown('<div class="tablo-title">⚽ ЧМ-2026 · ТАБЛО</div>', unsafe_allow_html=True)
     st.markdown(
@@ -435,7 +437,7 @@ def main() -> None:
             st.session_state.assists = a
         v = safe_fetch(fetch_values, "Стоимость сборных")
         if v is not None:
-            st.session_state.values = v
+            st.session_state.team_values = v
 
     # Подпись о раннем этапе турнира.
     if dt.date.today() <= TOURNAMENT_START + dt.timedelta(days=14):
@@ -471,8 +473,8 @@ def main() -> None:
         if st.button("🔄 Обновить", key="upd_values"):
             v = safe_fetch(fetch_values, "Стоимость сборных")
             if v is not None:
-                st.session_state.values = v
-        render_values(st.session_state.values)
+                st.session_state.team_values = v
+        render_values(st.session_state.team_values)
 
 
 if __name__ == "__main__":
