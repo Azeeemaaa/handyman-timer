@@ -1,0 +1,13 @@
+# Секреты — НИКОГДА не коммитим
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Виртуальные окружения
+.venv/
+venv/
+env/
