@@ -275,7 +275,7 @@ if "show_msg_running" not in st.session_state:
 # ---------- общие параметры ----------
 st.markdown('<div class="sec-label">Параметры</div>', unsafe_allow_html=True)
 with st.container(border=True):
-    rate = st.number_input("💵 Почасовая ставка ($)", min_value=0.0, value=60.0, step=5.0)
+    rate = st.number_input("💵 Почасовая ставка ($)", min_value=0.0, value=65.0, step=5.0)
     materials = st.number_input("🧱 Материалы ($), необязательно", min_value=0.0, value=0.0, step=1.0)
 
 tab_timer, tab_manual, tab_history = st.tabs(["⏱ Таймер", "✍️ Вручную", "📋 История"])
