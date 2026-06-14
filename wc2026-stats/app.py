@@ -204,7 +204,9 @@ def _call_claude(prompt: str) -> dict:
     resp = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
+        # max_uses ограничивает число веб-поисков на один запрос, чтобы не
+        # раздувать входные токены и не упираться в rate limit (429).
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 2}],
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -400,7 +402,21 @@ def safe_fetch(fetcher, label: str):
         with st.spinner(f"Обновляю: {label}…"):
             return fetcher()
     except Exception as exc:  # noqa: BLE001
-        st.error(f"Не удалось обновить «{label}»: {exc}")
+        msg = str(exc)
+        low = msg.lower()
+        if "rate_limit" in low or "429" in low:
+            friendly = (
+                "превышен лимит запросов в минуту. Подождите ~минуту и обновляйте "
+                "разделы по одному, не нажимая «Обновить всё»."
+            )
+        elif "credit balance" in low or "billing" in low:
+            friendly = (
+                "недостаточно средств на аккаунте Anthropic — пополните баланс на "
+                "console.anthropic.com."
+            )
+        else:
+            friendly = msg
+        st.error(f"Не удалось обновить «{label}»: {friendly}")
         return None
 
 
