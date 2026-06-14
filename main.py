@@ -133,10 +133,6 @@ def inject_css():
         }
         .timer-status { text-align:center; color: var(--gray); font-weight:700; margin-bottom: 6px; }
         .pay-now { text-align:center; font-size: 1.05rem; color:#1C1C2E; margin-top: 2px; }
-        .chip {
-            display:inline-block; background:var(--lav); color:var(--accent);
-            font-weight:700; font-size:13px; padding:4px 12px; border-radius:999px; margin-top:6px;
-        }
         .pay-big { text-align:center; color: var(--green); font-weight:800; font-size: 2rem; margin: 6px 0; }
         .total-row {
             display:flex; align-items:center; justify-content:space-between;
@@ -551,12 +547,17 @@ with tab_history:
         unsafe_allow_html=True,
     )
     if history:
+        # Один проход: общий заработок и суммы по дням (для среднего и графика)
         total_earned = 0.0
+        per_day = {}
         for item in history:
             try:
-                total_earned += float(item.get("total", 0) or 0)
+                amt = float(item.get("total", 0) or 0)
             except (ValueError, TypeError):
-                pass
+                continue
+            total_earned += amt
+            day = str(item.get("date", ""))[:10]
+            per_day[day] = per_day.get(day, 0.0) + amt
 
         # Градиентный блок-итог
         st.markdown(
@@ -595,13 +596,6 @@ with tab_history:
             )
 
         # Средний заработок в день + мини-график
-        per_day = {}
-        for item in history:
-            d = str(item.get("date", ""))[:10]
-            try:
-                per_day[d] = per_day.get(d, 0.0) + float(item.get("total", 0) or 0)
-            except (ValueError, TypeError):
-                pass
         avg = total_earned / max(1, len(per_day))
         recent = [per_day[k] for k in sorted(per_day.keys())][-12:]
         bars = ""
