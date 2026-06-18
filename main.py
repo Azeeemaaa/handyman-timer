@@ -1,6 +1,8 @@
 import time
 import json
 import html
+import urllib.request
+import urllib.error
 from datetime import datetime, timedelta, time as dt_time
 
 import streamlit as st
@@ -188,40 +190,167 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Хранилище в браузере телефона: данные остаются у тебя и переживают
-# перезапуск сервера. Время считается от момента старта, поэтому таймер
-# "идёт" даже когда приложение закрыто.
-localS = LocalStorage()
+# ====================== ХРАНИЛИЩЕ ДАННЫХ ======================
+# Все данные (активный таймер и история работ) живут во внешнем надёжном
+# хранилище — приватном GitHub Gist. Оно переживает засыпание приложения на
+# Streamlit Cloud, перезапуск сервера и капризы памяти браузера на iPhone.
+#
+# Чтобы оно включилось, в Secrets приложения нужно добавить токен GH_GIST_TOKEN
+# (одноразовая настройка, см. инструкцию). Пока токена нет — работает резерв
+# (localStorage), как раньше, так что приложение не ломается ни при каких
+# условиях. Сам файл-хранилище создаётся в gist автоматически при первом старте.
+#
+# Время всегда считается от таймстампа старта, поэтому таймер «идёт», даже когда
+# приложение закрыто.
 
-TIMER_KEY = "ht_timer"      # активный таймер: {"start": ts, "pause": ts|null, "rate": r, "materials": m}
-HISTORY_KEY = "ht_history"  # список завершённых работ
+TIMER_KEY = "ht_timer"      # ключ активного таймера в localStorage-резерве
+HISTORY_KEY = "ht_history"  # ключ истории в localStorage-резерве
 MIN_TOTAL = 100.0           # минимальная итоговая цена за работу ($), даже за пару минут
+GIST_FILENAME = "handyman-timer-state.json"  # имя файла-хранилища внутри gist
+_QP_KEYS = ("ts", "pr", "mt", "pa")          # ключи активного таймера в адресе страницы
 
 
-# Серверное хранилище активного таймера: один словарь, живущий в памяти
-# процесса приложения (общий для всех подключений — приложение личное, таймер
-# один за раз). Главный плюс: переживает полное закрытие телефона, потерю
-# параметров URL и сброс localStorage на iPhone — то есть ровно сценарий
-# "нажал старт → закрыл приложение → через час открыл". Живёт, пока жив
-# процесс на Streamlit Cloud (до «засыпания» приложения); на этот редкий
-# случай резервом остаётся localStorage.
 @st.cache_resource
-def _server_store():
-    return {}
+def _store():
+    """Рабочая копия всех данных в памяти процесса, общая для всех подключений.
+    Подгружается из gist (или localStorage) при холодном старте и дальше читается
+    мгновенно — чтобы автообновление таймера раз в секунду не дёргало сеть."""
+    return {"timer": None, "history": None, "loaded": False, "gist_id": None, "source": None}
 
 
-SERVER_TIMER_KEY = "active_timer"
+@st.cache_resource
+def _local_storage():
+    """Компонент localStorage создаём лениво и только как резерв: когда настроено
+    внешнее хранилище, он не рисует свой iframe (и возможную ошибку
+    «not connected to a server»)."""
+    return LocalStorage()
 
 
-# ---------- работа с хранилищем ----------
-# Активный таймер держим в параметрах URL (st.query_params): они читаются
-# мгновенно и синхронно, поэтому переживают перезагрузку страницы и
-# переподключение (когда телефон уходит в фон). localStorage — резерв на случай
-# открытия по «чистому» адресу. Время всегда считается от таймстампа старта,
-# так что таймер «идёт», даже если приложение было закрыто.
-_QP_KEYS = ("ts", "pr", "mt", "pa")
+def _gist_token():
+    try:
+        if "GH_GIST_TOKEN" in st.secrets:
+            return st.secrets["GH_GIST_TOKEN"] or None
+    except Exception:
+        pass
+    return None
 
 
+# ---------- низкоуровневый доступ к GitHub Gist ----------
+def _gh_api(method, url, token, payload=None):
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("Accept", "application/vnd.github+json")
+    req.add_header("User-Agent", "handyman-timer")
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode())
+
+
+def _gist_find_id(token):
+    """Находит id нашего gist по имени файла; кэширует в рабочей копии."""
+    store = _store()
+    if store.get("gist_id"):
+        return store["gist_id"]
+    gists = _gh_api("GET", "https://api.github.com/gists?per_page=100", token)
+    for g in gists:
+        if GIST_FILENAME in (g.get("files") or {}):
+            store["gist_id"] = g["id"]
+            return g["id"]
+    return None
+
+
+def _remote_load(token):
+    """Читает {'timer':..., 'history':...} из gist.
+    None — если произошла ошибка (тогда мы НЕ трогаем gist, чтобы не затереть данные)."""
+    try:
+        gid = _gist_find_id(token)
+        if not gid:
+            return {"timer": None, "history": []}  # gist ещё не создан — данных нет
+        gist = _gh_api("GET", f"https://api.github.com/gists/{gid}", token)
+        state = json.loads(gist["files"][GIST_FILENAME]["content"])
+        return {"timer": state.get("timer"), "history": state.get("history") or []}
+    except Exception:
+        return None
+
+
+def _remote_save(token, state):
+    """Сохраняет полное состояние в gist (создаёт gist при первом сохранении)."""
+    try:
+        files = {GIST_FILENAME: {"content": json.dumps(state, ensure_ascii=False, indent=2)}}
+        gid = _store().get("gist_id") or _gist_find_id(token)
+        if gid:
+            _gh_api("PATCH", f"https://api.github.com/gists/{gid}", token, {"files": files})
+        else:
+            created = _gh_api("POST", "https://api.github.com/gists", token, {
+                "description": "Handyman timer — данные приложения (таймер и история)",
+                "public": False,
+                "files": files,
+            })
+            _store()["gist_id"] = created["id"]
+        return True
+    except Exception:
+        return False
+
+
+def _ls_get_json(key):
+    try:
+        raw = _local_storage().getItem(key)
+        return json.loads(raw) if raw else None
+    except Exception:
+        return None
+
+
+def _ensure_loaded():
+    """Подгружает рабочую копию из надёжного хранилища один раз на «жизнь» процесса."""
+    store = _store()
+    if store["loaded"]:
+        return store
+    token = _gist_token()
+    if token:
+        remote = _remote_load(token)
+        if remote is not None:
+            store["timer"] = remote["timer"]
+            store["history"] = remote["history"]
+            store["source"] = "remote"
+            store["loaded"] = True
+        else:
+            # Ошибка чтения gist: не помечаем как загруженное и НЕ перезаписываем
+            # gist при сохранении — чтобы случайно не затереть историю. Повторим позже.
+            store["history"] = store["history"] or []
+            store["source"] = "error"
+        return store
+    # Без токена — резерв localStorage (прежнее поведение)
+    store["timer"] = _ls_get_json(TIMER_KEY)
+    store["history"] = _ls_get_json(HISTORY_KEY) or []
+    store["source"] = "local"
+    store["loaded"] = True
+    return store
+
+
+def _persist():
+    """Сохраняет текущую рабочую копию в надёжное хранилище."""
+    store = _store()
+    state = {"timer": store["timer"], "history": store["history"] or []}
+    token = _gist_token()
+    if token and store.get("source") != "error" and _remote_save(token, state):
+        store["source"] = "remote"
+        store["loaded"] = True
+        return
+    # Резерв: localStorage
+    try:
+        ls = _local_storage()
+        ls.setItem(TIMER_KEY, json.dumps(state["timer"]) if state["timer"] else "", key="set_timer")
+        ls.setItem(HISTORY_KEY, json.dumps(state["history"]), key="set_history")
+    except Exception:
+        pass
+
+
+# ---------- активный таймер ----------
+# Активный таймер дублируется в параметрах URL (st.query_params): они читаются
+# мгновенно и синхронно, поэтому автообновление раз в секунду обходится без сети,
+# а перезагрузка страницы/переподключение не теряют таймер в пределах сессии.
 def _timer_from_query():
     qp = st.query_params
     if "ts" not in qp:
@@ -239,6 +368,11 @@ def _timer_from_query():
 
 
 def _timer_to_query(data):
+    if not data:
+        for k in _QP_KEYS:
+            if k in st.query_params:
+                del st.query_params[k]
+        return
     st.query_params["ts"] = repr(float(data["start"]))
     st.query_params["pr"] = repr(float(data.get("rate", 0) or 0))
     st.query_params["mt"] = repr(float(data.get("materials", 0) or 0))
@@ -249,58 +383,45 @@ def _timer_to_query(data):
 
 
 def get_timer():
-    # 1) URL — мгновенно и синхронно, в пределах текущей вкладки
+    # URL — мгновенно (основной путь, пока таймер идёт): не трогает сеть
     timer = _timer_from_query()
     if timer is not None:
-        _server_store()[SERVER_TIMER_KEY] = timer
         return timer
-    # 2) Сервер — главный надёжный источник: переживает закрытие телефона,
-    #    потерю адреса и сброс localStorage. Читается сразу, без гонки.
-    timer = _server_store().get(SERVER_TIMER_KEY)
-    if timer is not None:
-        _timer_to_query(timer)
+    # Иначе берём из рабочей копии (при холодном старте подгружена из gist)
+    timer = _ensure_loaded().get("timer")
+    if timer:
+        _timer_to_query(timer)  # разложим в адрес, чтобы дальше читать без сети
         return timer
-    # 3) localStorage — резерв на случай перезапуска сервера
-    raw = localS.getItem(TIMER_KEY)
-    if not raw:
-        return None
-    try:
-        timer = json.loads(raw)
-    except (ValueError, TypeError):
-        return None
-    # Восстановили из резерва — раскладываем по серверу и URL
-    _server_store()[SERVER_TIMER_KEY] = timer
-    _timer_to_query(timer)
-    return timer
+    return None
 
 
 def set_timer(data):
+    store = _ensure_loaded()
+    store["timer"] = data
     _timer_to_query(data)
-    _server_store()[SERVER_TIMER_KEY] = data
-    localS.setItem(TIMER_KEY, json.dumps(data), key="set_timer")
+    _persist()
 
 
 def clear_timer():
-    for k in _QP_KEYS:
-        if k in st.query_params:
-            del st.query_params[k]
-    _server_store().pop(SERVER_TIMER_KEY, None)
-    if localS.getItem(TIMER_KEY):
-        localS.deleteItem(TIMER_KEY, key="del_timer")
+    store = _ensure_loaded()
+    store["timer"] = None
+    _timer_to_query(None)
+    _persist()
 
 
+# ---------- история работ ----------
 def get_history():
-    raw = localS.getItem(HISTORY_KEY)
-    if not raw:
-        return []
-    try:
-        return json.loads(raw)
-    except (ValueError, TypeError):
-        return []
+    return _ensure_loaded().get("history") or []
 
 
 def set_history(items):
-    localS.setItem(HISTORY_KEY, json.dumps(items), key="set_history")
+    store = _ensure_loaded()
+    store["history"] = items
+    _persist()
+
+
+def clear_history():
+    set_history([])
 
 
 def add_history_entry(date_str, client, elapsed_str, hours, rate, materials, total, break_min=0):
@@ -700,7 +821,7 @@ with tab_history:
             )
             st.warning("Удаление истории необратимо.")
             if st.button("🗑 Удалить всю историю", type="primary"):
-                localS.deleteItem(HISTORY_KEY, key="del_history")
+                clear_history()
                 st.rerun()
     else:
         with st.container(border=True):
